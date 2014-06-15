@@ -13,13 +13,18 @@
       var MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent)
 
       function Controls() {
-        this.codes  = { 37: 'left', 39: 'right', 38: 'forward', 40: 'backward' };
+        this.codes  = { 37: 'left', 39: 'right', 38: 'forward', 40: 'backward',
+                        65: 'sideLeft', 68: 'sideRight', 87: 'forward', 83: 'backward' };
         this.states = { 'left': false, 'right': false, 'forward': false, 'backward': false };
         document.addEventListener('keydown', this.onKey.bind(this, true), false);
         document.addEventListener('keyup', this.onKey.bind(this, false), false);
         document.addEventListener('touchstart', this.onTouch.bind(this), false);
         document.addEventListener('touchmove', this.onTouch.bind(this), false);
         document.addEventListener('touchend', this.onTouchEnd.bind(this), false);
+        document.addEventListener('mousemove', this.onMouseMovement.bind(this), false);
+        document.body.onclick = document.body.requestPointerLock ||
+                                document.body.mozRequestPointerLock ||
+                                document.body.webkitRequestPointerLock;
       }
 
       Controls.prototype.onTouch = function(e) {
@@ -31,7 +36,7 @@
       };
 
       Controls.prototype.onTouchEnd = function(e) {
-        this.states = { 'left': false, 'right': false, 'forward': false, 'backward': false };
+        this.states = { 'left': false, 'right': false, 'forward': false, 'backward': false, 'sideLeft': false, 'sideRight': false};
         e.preventDefault();
         e.stopPropagation();
       };
@@ -44,13 +49,19 @@
         e.stopPropagation && e.stopPropagation();
       };
 
+      Controls.prototype.onMouseMovement = function (e) {
+            var x = (e.movementX || e.mozMovementX || e.webkitMovementX || 0);
+            if (x > 0) player.rotate(Math.PI/40);
+            if (x < 0) player.rotate(-Math.PI/40);
+      };
+
       function Bitmap(src, width, height) {
         this.image = new Image();
         this.image.src = src;
         this.width = width;
         this.height = height;
       }
-      
+
       function Player(x, y, direction) {
         this.x = x;
         this.y = y;
@@ -63,9 +74,9 @@
         this.direction = (this.direction + angle + CIRCLE) % (CIRCLE);
       };
 
-      Player.prototype.walk = function(distance, map) {
-        var dx = Math.cos(this.direction) * distance;
-        var dy = Math.sin(this.direction) * distance;
+      Player.prototype.walk = function(distance, map, direction) {
+        var dx = Math.cos(direction) * distance;
+        var dy = Math.sin(direction) * distance;
         if (map.get(this.x + dx, this.y) <= 0) this.x += dx;
         if (map.get(this.x, this.y + dy) <= 0) this.y += dy;
         this.paces += distance;
@@ -74,8 +85,10 @@
       Player.prototype.update = function(controls, map, seconds) {
         if (controls.left) this.rotate(-Math.PI * seconds);
         if (controls.right) this.rotate(Math.PI * seconds);
-        if (controls.forward) this.walk(3 * seconds, map);
-        if (controls.backward) this.walk(-3 * seconds, map);
+        if (controls.forward) this.walk(3 * seconds, map, this.direction);
+        if (controls.backward) this.walk(-3 * seconds, map, this.direction);
+        if (controls.sideLeft) this.walk(3 * seconds, map, this.direction - Math.PI/2);
+        if (controls.sideRight) this.walk(-3 * seconds, map, this.direction - Math.PI/2);
       };
 
       function Map(size) {
@@ -220,12 +233,12 @@
 
             ctx.globalAlpha = 1;
             ctx.drawImage(texture.image, textureX, 0, 1, texture.height, left, wall.top, width, wall.height);
-            
+
             ctx.fillStyle = '#000000';
             ctx.globalAlpha = Math.max((step.distance + step.shading) / this.lightRange - map.light, 0);
             ctx.fillRect(left, wall.top, width, wall.height);
           }
-          
+
           ctx.fillStyle = '#ffffff';
           ctx.globalAlpha = 0.15;
           while (--rainDrops > 0) ctx.fillRect(left, Math.random() * rain.top, 1, rain.height);
@@ -239,7 +252,7 @@
         return {
           top: bottom - wallHeight,
           height: wallHeight
-        }; 
+        };
       };
 
       function GameLoop() {
@@ -268,7 +281,7 @@
       var loop = new GameLoop();
 
       map.randomize();
-      
+
       loop.start(function frame(seconds) {
         map.update(seconds);
         player.update(controls.states, map, seconds);
